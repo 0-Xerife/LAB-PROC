@@ -1,0 +1,16 @@
+=================================
+  SISTEMA DE SEMÁFORO INICIADO   
+=================================
+MODO ATENÇÃO: Iniciando Amarelo Piscante...
+Piscada 1
+Piscada 2
+Piscada 3
+Piscada 4
+Piscada 5
+MODO ATENÇÃO: Concluído. Iniciando Ciclo Normal.
+---------------------------------
+Sinal: VERDE
+Sinal: VERMELHO
+Sinal: AMARELO
+Sinal: VERDE
+... (loop infinito)
