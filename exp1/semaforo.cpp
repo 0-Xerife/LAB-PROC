@@ -23,17 +23,13 @@ void setup()
     digitalWrite(PIN_AMARELO, LED_OFF);
 
     Serial.begin(115200);
-    Serial.println("=================================");
     Serial.println("  SISTEMA DE SEMÁFORO INICIADO   ");
-    Serial.println("=================================");
 }
 
 void loop()
 {
 
-    // ==========================================
     // FASE 1: MODO ATENÇÃO (AMARELO PISCANTE)
-    // ==========================================
     if (!faseAtencaoConcluida)
     {
         Serial.println("MODO ATENÇÃO: Iniciando Amarelo Piscante...");
@@ -42,10 +38,10 @@ void loop()
         for (int i = 0; i < 5; i++)
         {
             digitalWrite(PIN_AMARELO, LED_ON);
-            delay(500); // Meio segundo aceso
+            delay(700); // 0,7s aceso
 
             digitalWrite(PIN_AMARELO, LED_OFF);
-            delay(500); // Meio segundo apagado
+            delay(700); // 0,7s apagado
 
             Serial.print("Piscada ");
             Serial.println(i + 1);
