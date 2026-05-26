@@ -1,3 +1,6 @@
+# note que, embora o codigo não possua outros tempos de delay, ele ainda sim está sendo essencial para visualização
+# da logica de funcionamento na simulação no CPUlator
+
 .data
 GPIO_OUT: .word 0x10000000  # Endereço simulado do hardware
 
