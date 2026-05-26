@@ -6,8 +6,7 @@
 * **Simuladores:** CPulator (Simulação Bare-metal RISC-V)
 * **Ambiente de Desenvolvimento:** VS Code 
 
-## 🚀 Como Executar Localmente
+## 🚀 URL's importantes
 
-1. Clone este repositório:
-   ```bash
-   git clone [https://github.com/SEU-USUARIO/NOME-DO-REPOSITORIO.git](https://github.com/SEU-USUARIO/NOME-DO-REPOSITORIO.git)
+2. Google Drive do grupo:
+https://drive.google.com/drive/folders/1KtcrDA-4LFP18DiJ6__x1CmXkc7tsUtM?usp=sharing
