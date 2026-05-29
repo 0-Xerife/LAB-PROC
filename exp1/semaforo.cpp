@@ -1,78 +1,76 @@
-// Definição dos Pinos (Ajuste conforme sua montagem)
-const int PIN_VERDE = 8;
-const int PIN_VERMELHO = 9;
-const int PIN_AMARELO = 10;
+// Precisou ser feita uma alteração inteira no codigo referente ao antigo por conta de erro de consideração do grupo em relação ao LED do esp32.
 
-// Lógica Invertida (Active Low):
-// Como estamos lidando com LEDs possivelmente invertidos no ESP32:
-#define LED_ON LOW
-#define LED_OFF HIGH
+// O código antigo considerava 3 LEDs distintos, enquanto esse mais atualizado considera tanto o LED ser RGB, quanto ser um LED só.
 
-// Variável para controlar se já passamos da fase de atenção
+
+#include <Adafruit_NeoPixel.h>
+
+#define PIN_LED 8      // Pino de dados
+#define NUM_LEDS 1
+
+Adafruit_NeoPixel led(NUM_LEDS, PIN_LED, NEO_GRB + NEO_KHZ800);
+
 bool faseAtencaoConcluida = false;
 
 void setup()
 {
-    pinMode(PIN_VERDE, OUTPUT);
-    pinMode(PIN_VERMELHO, OUTPUT);
-    pinMode(PIN_AMARELO, OUTPUT);
-
-    // Inicia com todos desligados (Estado Seguro)
-    digitalWrite(PIN_VERDE, LED_OFF);
-    digitalWrite(PIN_VERMELHO, LED_OFF);
-    digitalWrite(PIN_AMARELO, LED_OFF);
-
     Serial.begin(115200);
-    Serial.println("=================================");
-    Serial.println("  SISTEMA DE SEMÁFORO INICIADO   ");
-    Serial.println("=================================");
+
+    led.begin();
+    led.clear();
+    led.show();
+
+    Serial.println("SISTEMA DE SEMAFORO INICIADO");
+}
+
+void setColor(int r, int g, int b)
+{
+    led.setPixelColor(0, led.Color(r, g, b));
+    led.show();
 }
 
 void loop()
 {
-
-    // ==========================================
-    // FASE 1: MODO ATENÇÃO (AMARELO PISCANTE)
-    // ==========================================
+    // FASE 1: Amarelo piscante
     if (!faseAtencaoConcluida)
     {
-        Serial.println("MODO ATENÇÃO: Iniciando Amarelo Piscante...");
+        Serial.println("MODO ATENCAO");
 
-        // Pisca o amarelo 5 vezes antes de ir para o ciclo normal
         for (int i = 0; i < 5; i++)
         {
-            digitalWrite(PIN_AMARELO, LED_ON);
-            delay(500); // Meio segundo aceso
+            // Amarelo
+            setColor(255, 255, 0);
+            delay(700);
 
-            digitalWrite(PIN_AMARELO, LED_OFF);
-            delay(500); // Meio segundo apagado
-
-            Serial.print("Piscada ");
-            Serial.println(i + 1);
+            // Desliga
+            setColor(0, 0, 0);
+            delay(700);
         }
 
-        // Marca a fase de atenção como concluída para nunca mais entrar neste "if"
         faseAtencaoConcluida = true;
-        Serial.println("MODO ATENÇÃO: Concluído. Iniciando Ciclo Normal.");
-        Serial.println("---------------------------------");
     }
 
-    // FASE 2: CICLO NORMAL (Loop Infinito)
-    // Estado 1: Verde (3 segundos)
-    Serial.println("Sinal: VERDE");
-    digitalWrite(PIN_VERDE, LED_ON);
+    // VERDE
+    Serial.println("VERDE");
+    setColor(0, 255, 0);
     delay(3000);
-    digitalWrite(PIN_VERDE, LED_OFF);
 
-    // Estado 2: Vermelho (4 segundos)
-    Serial.println("Sinal: VERMELHO");
-    digitalWrite(PIN_VERMELHO, LED_ON);
+    // DESLIGA
+    setColor(0, 0, 0);
+
+    // VERMELHO
+    Serial.println("VERMELHO");
+    setColor(255, 0, 0);
     delay(4000);
-    digitalWrite(PIN_VERMELHO, LED_OFF);
 
-    // Estado 3: Amarelo (1 segundo)
-    Serial.println("Sinal: AMARELO");
-    digitalWrite(PIN_AMARELO, LED_ON);
+    // DESLIGA
+    setColor(0, 0, 0);
+
+    // AMARELO
+    Serial.println("AMARELO");
+    setColor(255, 255, 0);
     delay(1000);
-    digitalWrite(PIN_AMARELO, LED_OFF);
+
+    // DESLIGA
+    setColor(0, 0, 0);
 }
