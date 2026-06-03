@@ -5,10 +5,10 @@
 
 // Pinos dos LEDs no ESP32
 // TROCAR OS PINOS PARA PINOS USUAIS NO ESP32
-const int LED_BIT3 = 19;
-const int LED_BIT2 = 18;
-const int LED_BIT1 = 5;
-const int LED_BIT0 = 17;
+const int LED_BIT3 = 5;
+const int LED_BIT2 = 6;
+const int LED_BIT1 = 7;
+const int LED_BIT0 = 8;
 
 // Nome da rede no wifi
 const char *ssid = "Calc_Blaster_Master";
