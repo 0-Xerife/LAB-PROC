@@ -1,6 +1,16 @@
-# Controle de Periféricos com PWM e ESP32-C3
+# Controle de Periféricos com PWM e ESP32
 
-Este repositório contém o projeto desenvolvido para o **Laboratório 5** da disciplina **PCS3732**. O objetivo do experimento é implementar o controle integrado e não bloqueante de periféricos (um LED externo e um servomotor) a partir de uma interface web responsiva, utilizando a arquitetura RISC-V do microcontrolador ESP32-C3.
+1. **Montagem Isolada (LED):** Montagem do LED e dimensionamento do resistor em protoboard, validando a polaridade antes de qualquer conexão de rede.
+2. **Teste Blink:** Execução de um código simples de piscada para garantir a integridade do circuito elétrico.
+3. **Desenvolvimento Incremental:** Codificação modular e rastreamento de erros lógicos através de mensagens enviadas em tempo real para o _Serial Monitor_.
+
+## 🚀 Como Executar o Projeto
+
+1. Abra o código contido na pasta `/src` utilizando a **Arduino IDE**.
+2. Altere as variáveis de configuração de Wi-Fi (`ssid` e `password`) com as credenciais da sua bancada de teste.
+3. Configure a taxa de transmissão do terminal em `115200 baud`.
+4. Compile e grave o firmware na placa ESP32-C3.
+5. Copie o endereço IP impresso no terminal, cole em seu navegador de preferência e gerencie os periféricos em tempo real.
 
 ## 🏗️ Arquitetura do Sistema
 
