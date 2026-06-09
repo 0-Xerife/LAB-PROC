@@ -1,29 +1,31 @@
+
 #include <WiFi.h>
 #include <WebServer.h>
 
-// config de rede
-const char *ssid = "Manipulador_de_almas";
-const char *password = "121216";
+
+// config de rede (O ESP32 vai CRIAR esta rede)
+const char *ssid = "ManipuladorDeAlmas";
+const char *password = "12121600"; // Senha precisa ter no mínimo 8 caracteres!
+
 
 WebServer server(80);
+
 
 // mapeamento dos pinos (verificar pinout da placa)
 const int ledPin = 3;
 const int servoPin = 4;
 
-// Configurações dos Canais PWM (LEDC)
-// Canal 0: LED (Alta Frequência, ajustável via Web)
-const int ledChannel = 0;
+
+// Configurações PWM (Nova API v3.0+)
 int ledFreq = 1000;          // Inicial em 1 kHz
 const int ledResolution = 8; // 8 bits (0 a 255)
 
-// Canal 1: Servomotor (Baixa Frequência fixa em 50Hz)
-const int servoChannel = 1;
+
 const int servoFreq = 50;       // 50Hz = período de 20ms
 const int servoResolution = 12; // 12 bits (0 a 4095) para maior precisão
 
+
 // interface web
-// O JS usa fetch() para chamadas HTTP assíncronas sem recarregar a página.
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -44,16 +46,18 @@ const char index_html[] PROGMEM = R"rawliteral(
 <body>
     <div class="container">
         <h2>Controle de Periféricos</h2>
-        
+       
         <div class="slider-group">
             <label>Brilho do LED: <span id="ledVal" class="val">0</span>%</label>
             <input type="range" id="ledSlider" min="0" max="100" value="0" oninput="updateESP()">
         </div>
 
+
         <div class="slider-group">
             <label>Frequência (LED): <span id="freqVal" class="val">1000</span> Hz</label>
             <input type="range" id="freqSlider" min="50" max="5000" step="50" value="1000" oninput="updateESP()">
         </div>
+
 
         <div class="slider-group">
             <label>Posição do Servo: <span id="servoVal" class="val">0</span>&deg;</label>
@@ -61,24 +65,26 @@ const char index_html[] PROGMEM = R"rawliteral(
         </div>
     </div>
 
+
     <script>
         function updateESP() {
             let led = document.getElementById("ledSlider").value;
             let freq = document.getElementById("freqSlider").value;
             let servo = document.getElementById("servoSlider").value;
 
-            // Atualiza a interface gráfica em tempo real
+
             document.getElementById("ledVal").innerText = led;
             document.getElementById("freqVal").innerText = freq;
             document.getElementById("servoVal").innerText = servo;
 
-            // Envia requisição GET assíncrona (AJAX) para o ESP32
+
             fetch(`/api/update?led=${led}&freq=${freq}&servo=${servo}`);
         }
     </script>
 </body>
 </html>
 )rawliteral";
+
 
 // requisicoes para alteracao
 void handleUpdate()
@@ -89,25 +95,21 @@ void handleUpdate()
         int newFreq = server.arg("freq").toInt();
         int servoAngle = server.arg("servo").toInt();
 
-        // controle da frequencia do led
+
         if (newFreq != ledFreq)
         {
             ledFreq = newFreq;
-            // reconfiguracao em caso de slide
-            ledcSetup(ledChannel, ledFreq, ledResolution);
+            ledcAttach(ledPin, ledFreq, ledResolution);
         }
 
-        // controle do duty cycle do led (0 a 100% convertido pra 0 a 255)
-        int ledDuty = map(ledPercent, 0, 100, 0, 255);
-        ledcWrite(ledChannel, ledDuty);
 
-        // controle do servomotor (matematica baseada no PDF)
-        // Resolução de 12 bits = 4096 valores (0 a 4095).
-        // A 50Hz, 1 ciclo = 20ms.
-        // - 1.0 ms (0 graus)   = (1.0 / 20) * 4096 = ~205
-        // - 2.0 ms (180 graus) = (2.0 / 20) * 4096 = ~410
+        int ledDuty = map(ledPercent, 0, 100, 0, 255);
+        ledcWrite(ledPin, ledDuty);
+
+
         int servoDuty = map(servoAngle, 0, 180, 205, 410);
-        ledcWrite(servoChannel, servoDuty);
+        ledcWrite(servoPin, servoDuty);
+
 
         server.send(200, "text/plain", "OK");
     }
@@ -117,49 +119,49 @@ void handleUpdate()
     }
 }
 
-// setup e loop principal
+
 void setup()
 {
     Serial.begin(115200);
     delay(100);
 
-    // configuracao do hardware pwm (ledc)
-    // Nota: Em versões do Core ESP32 Arduino >= 3.0, ledcSetup foi descontinuada.
-    // Se houver erro de compilação, precisará usar ledcAttach(pin, freq, resolution);
-    ledcSetup(ledChannel, ledFreq, ledResolution);
-    ledcAttachPin(ledPin, ledChannel);
 
-    ledcSetup(servoChannel, servoFreq, servoResolution);
-    ledcAttachPin(servoPin, servoChannel);
+    // Configuração do hardware PWM
+    ledcAttach(ledPin, ledFreq, ledResolution);
+    ledcAttach(servoPin, servoFreq, servoResolution);
 
-    // inicializando posicoes padrao
-    ledcWrite(ledChannel, 0);
-    ledcWrite(servoChannel, map(0, 0, 180, 205, 410)); // Força posição 0 no boot
 
-    // conexao com wifi
-    Serial.println("\nConectando ao Wi-Fi...");
-    WiFi.begin(ssid, password);
+    ledcWrite(ledPin, 0);
+    ledcWrite(servoPin, map(0, 0, 180, 205, 410));
 
-    while (WiFi.status() != WL_CONNECTED)
-    {
-        delay(500);
-        Serial.print(".");
-    }
 
-    Serial.println("\nConectado com sucesso!");
+    // MODIFICAÇÃO AQUI: Configurando o ESP32 como Ponto de Acesso (Access Point)
+    Serial.println("\nIniciando Ponto de Acesso (AP)...");
+    WiFi.softAP(ssid, password);
+
+
+    Serial.println("Rede Wi-Fi criada com sucesso!");
+    Serial.print("Nome da Rede (SSID): ");
+    Serial.println(ssid);
+   
+    // Em modo AP, o IP padrão do ESP32 costuma ser sempre 192.168.4.1
     Serial.print("Acesse o painel no navegador via IP: ");
-    Serial.println(WiFi.localIP());
+    Serial.println(WiFi.softAPIP());
+
 
     // roteamento de uris do servidor
-    server.on("/", []()
-              { server.send(200, "text/html", index_html); });
+    server.on("/", []() {
+        server.send(200, "text/html", index_html);
+    });
     server.on("/api/update", handleUpdate);
+
 
     server.begin();
 }
 
+
 void loop()
 {
-    // apenas ouve o cliente (sem travar a cpu num while-loop)
     server.handleClient();
 }
+
