@@ -1,13 +1,6 @@
 """
 PCS3732 - EXP10
-Fechadura Eletrônica com Raspberry Pi 3 (Adaptado para Sensor Ultrassônico)
-
-Componentes:
-- Teclado matricial 4x4 Freenove
-- Display LCD1602 I2C Freenove
-- Buzzer
-- Sensor Ultrassônico (HC-SR04) monitorando estado da porta
-- Atuador da trava: relé, LED ou solenoide
+Fechadura Eletrônica com Raspberry Pi 3 (Adaptado para Sensor Ultrassônico e Buzzer PWM/Digital)
 """
 
 from __future__ import annotations
@@ -41,15 +34,14 @@ KEYS = [
     "*", "0", "#", "D",
 ]
 
-# Pinos BCM usados pela documentação Freenove para teclado matricial.
 ROWS_PINS = [16, 20, 21, 26]
 COLS_PINS = [19, 13, 6, 5]
 
-# Pinos extras do projeto.
-DEFAULT_BUZZER_PIN = 23
+# Atualizado com seus pinos:
+DEFAULT_BUZZER_ACTIVE_PIN = 12   # Buzzer Ativo
+DEFAULT_BUZZER_PASSIVE_PIN = 4   # Buzzer Passivo
 DEFAULT_LOCK_PIN = 24
 
-# Pinos do Sensor Ultrassônico
 DEFAULT_TRIG_PIN = 14
 DEFAULT_ECHO_PIN = 15
 
@@ -127,12 +119,14 @@ class LockHardware:
         lock_pin: int,
         trig_pin: int,
         echo_pin: int,
+        use_passive_buzzer: bool = False,
         unlock_active_high: bool = True,
     ):
         self.buzzer_pin = buzzer_pin
         self.lock_pin = lock_pin
         self.trig_pin = trig_pin
         self.echo_pin = echo_pin
+        self.use_passive = use_passive_buzzer
         self.unlock_active_high = unlock_active_high
 
         GPIO.setmode(GPIO.BCM)
@@ -140,44 +134,55 @@ class LockHardware:
 
         GPIO.setup(self.buzzer_pin, GPIO.OUT)
         GPIO.setup(self.lock_pin, GPIO.OUT)
-        
-        # Configuração do Sensor Ultrassônico
+
+        if self.use_passive:
+            self.pwm = GPIO.PWM(self.buzzer_pin, 2000) # 2kHz
+        else:
+            self.pwm = None
+
         GPIO.setup(self.trig_pin, GPIO.OUT)
         GPIO.setup(self.echo_pin, GPIO.IN)
         GPIO.output(self.trig_pin, False)
 
         self.buzzer_off()
         self.lock()
-        
-        # Aguarda o sensor estabilizar
-        time.sleep(0.5)
+        time.sleep(0.3)
 
     def cleanup(self) -> None:
         self.buzzer_off()
+        if self.pwm:
+            self.pwm.stop()
         self.lock()
         GPIO.cleanup()
 
-    def buzzer_on(self) -> None:
-        GPIO.output(self.buzzer_pin, GPIO.HIGH)
+    def buzzer_on(self, freq: int = 2000) -> None:
+        if self.use_passive and self.pwm:
+            self.pwm.ChangeFrequency(freq)
+            self.pwm.start(50) # Duty cycle 50%
+        else:
+            GPIO.output(self.buzzer_pin, GPIO.HIGH)
 
     def buzzer_off(self) -> None:
-        GPIO.output(self.buzzer_pin, GPIO.LOW)
+        if self.use_passive and self.pwm:
+            self.pwm.stop()
+        else:
+            GPIO.output(self.buzzer_pin, GPIO.LOW)
 
-    def beep(self, duration: float = 0.08, count: int = 1, gap: float = 0.08) -> None:
+    def beep(self, duration: float = 0.08, count: int = 1, gap: float = 0.08, freq: int = 2000) -> None:
         for _ in range(count):
-            self.buzzer_on()
+            self.buzzer_on(freq)
             time.sleep(duration)
             self.buzzer_off()
             time.sleep(gap)
 
     def success_beep(self) -> None:
-        self.beep(duration=0.06, count=2, gap=0.06)
+        self.beep(duration=0.08, count=2, gap=0.06, freq=2500)
 
     def error_beep(self) -> None:
-        self.beep(duration=0.35, count=1, gap=0.05)
+        self.beep(duration=0.35, count=1, gap=0.05, freq=1000)
 
     def alarm_beep(self) -> None:
-        self.beep(duration=0.10, count=5, gap=0.06)
+        self.beep(duration=0.10, count=5, gap=0.06, freq=3000)
 
     def unlock(self) -> None:
         value = GPIO.HIGH if self.unlock_active_high else GPIO.LOW
@@ -187,16 +192,15 @@ class LockHardware:
         value = GPIO.LOW if self.unlock_active_high else GPIO.HIGH
         GPIO.output(self.lock_pin, value)
 
-    def get_distance(self) -> float:
-        """Lê a distância usando o sensor ultrassônico"""
-        # Envia pulso de 10us
+    def _read_single_distance(self) -> float:
+        """Faz 1 disparo individual do ultrassom"""
         GPIO.output(self.trig_pin, True)
         time.sleep(0.00001)
         GPIO.output(self.trig_pin, False)
 
         start_time = time.time()
         stop_time = time.time()
-        timeout = start_time + 0.05 # Timeout de 50ms para não travar o loop
+        timeout = start_time + 0.03 # 30ms
 
         while GPIO.input(self.echo_pin) == 0:
             start_time = time.time()
@@ -209,22 +213,34 @@ class LockHardware:
                 return -1.0
 
         time_elapsed = stop_time - start_time
-        distance = (time_elapsed * 34300) / 2
-        return distance
+        return (time_elapsed * 34300) / 2
+
+    def get_distance((self)) -> float:
+        """Filtro de Média Móvel para evitar oscilações de leitura"""
+        reads = []
+        for _ in range(3):
+            d = self._read_single_distance()
+            if d > 0.5: # Ignora ruídos zerados/inválidos
+                reads.append(d)
+            time.sleep(0.005)
+
+        if not reads:
+            return -1.0
+        return sum(reads) / len(reads)
 
     def is_locked_sensor(self) -> bool:
         """
-        Retorna True se a porta estiver encostada (distância < 5cm).
-        Ajuste o valor '5.0' dependendo da montagem física da sua maquete.
+        Aumentado limite para 7.0cm para dar margem de erro.
+        Retorna True se estiver trancada (objeto próximo).
         """
         dist = self.get_distance()
-        if 0 < dist < 5.0:
+        if 0.5 <= dist <= 7.0:
             return True
         return False
 
 
 # ============================================================
-# Testes isolados
+# Testes Isolados
 # ============================================================
 
 def test_lcd(address: int) -> None:
@@ -252,23 +268,25 @@ def test_keypad() -> None:
         print("\nEncerrando teste de teclado.")
 
 
-def test_buzzer(buzzer_pin: int) -> None:
+def test_buzzer(buzzer_pin: int, is_passive: bool) -> None:
     hw = LockHardware(
         buzzer_pin=buzzer_pin,
         lock_pin=DEFAULT_LOCK_PIN,
         trig_pin=DEFAULT_TRIG_PIN,
         echo_pin=DEFAULT_ECHO_PIN,
+        use_passive_buzzer=is_passive,
     )
-    print("Teste do buzzer. Ctrl+C para sair.")
+    tipo = "PASSIVO (PWM)" if is_passive else "ATIVO (Digital)"
+    print(f"Teste do Buzzer no Pino GPIO {buzzer_pin} [{tipo}]. Ctrl+C para sair.")
     try:
         while True:
-            print("Bipe sucesso")
+            print("Bipe sucesso...")
             hw.success_beep()
             time.sleep(1)
-            print("Bipe erro")
+            print("Bipe erro...")
             hw.error_beep()
             time.sleep(1)
-            print("Bipe alerta")
+            print("Bipe alerta...")
             hw.alarm_beep()
             time.sleep(2)
     except KeyboardInterrupt:
@@ -279,25 +297,22 @@ def test_buzzer(buzzer_pin: int) -> None:
 
 def test_sensor(trig_pin: int, echo_pin: int) -> None:
     hw = LockHardware(
-        buzzer_pin=DEFAULT_BUZZER_PIN,
+        buzzer_pin=DEFAULT_BUZZER_ACTIVE_PIN,
         lock_pin=DEFAULT_LOCK_PIN,
         trig_pin=trig_pin,
         echo_pin=echo_pin,
     )
-    print("Teste do sensor ultrassônico.")
-    print("Mova um objeto perto do sensor. Ctrl+C para sair.")
+    print("Teste do sensor ultrassônico com filtro.")
+    print("Mova a porta/objeto. Ctrl+C para sair.")
     try:
-        last_state = None
         while True:
             dist = hw.get_distance()
             locked = hw.is_locked_sensor()
-            
             if dist > 0:
-                print(f"Distância: {dist:.1f} cm | Estado Lógico: {'TRANCADA' if locked else 'ABERTA'}")
+                print(f"Distância filtrada: {dist:.1f} cm | Estado: {'TRANCADA' if locked else 'ABERTA'}")
             else:
-                print("Erro de leitura do sensor (Timeout)")
-                
-            time.sleep(0.2)
+                print("Lendo / Fora de alcance")
+            time.sleep(0.15)
     except KeyboardInterrupt:
         pass
     finally:
@@ -306,14 +321,13 @@ def test_sensor(trig_pin: int, echo_pin: int) -> None:
 
 def test_lock(lock_pin: int, unlock_active_high: bool) -> None:
     hw = LockHardware(
-        buzzer_pin=DEFAULT_BUZZER_PIN,
+        buzzer_pin=DEFAULT_BUZZER_ACTIVE_PIN,
         lock_pin=lock_pin,
         trig_pin=DEFAULT_TRIG_PIN,
         echo_pin=DEFAULT_ECHO_PIN,
         unlock_active_high=unlock_active_high,
     )
-    print("Teste do atuador da trava.")
-    print("Alternando travado/destravado. Ctrl+C para sair.")
+    print("Teste do atuador da trava. Ctrl+C para sair.")
     try:
         while True:
             print("Destravando...")
@@ -329,7 +343,7 @@ def test_lock(lock_pin: int, unlock_active_high: bool) -> None:
 
 
 # ============================================================
-# Aplicação principal
+# Aplicação Principal
 # ============================================================
 
 class ElectronicLockApp:
@@ -473,9 +487,6 @@ class ElectronicLockApp:
         self.show_idle()
 
         print("Fechadura eletrônica iniciada.")
-        print("Teclado: 0-9 senha, * backspace, # confirma, A limpa, B sensor, C trava, D destrava.")
-        print("Ctrl+C para sair.")
-
         try:
             while True:
                 key = self.keypad.getKey()
@@ -502,10 +513,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Fechadura eletrônica com Raspberry Pi 3")
     parser.add_argument("--mode", choices=["run", "lcd", "keypad", "buzzer", "sensor", "lock"], default="run")
     parser.add_argument("--lcd-address", default="0x27")
-    parser.add_argument("--buzzer-pin", type=int, default=DEFAULT_BUZZER_PIN)
+    parser.add_argument("--buzzer-pin", type=int, default=DEFAULT_BUZZER_ACTIVE_PIN, help="Pino do Buzzer (GPIO 12 por padrao)")
+    parser.add_argument("--passive-buzzer", action="store_true", help="Ative essa flag se usar o buzzer passivo na GPIO 4")
     parser.add_argument("--lock-pin", type=int, default=DEFAULT_LOCK_PIN)
-    parser.add_argument("--trig-pin", type=int, default=DEFAULT_TRIG_PIN, help="GPIO BCM do pino Trigger do sensor ultrassônico")
-    parser.add_argument("--echo-pin", type=int, default=DEFAULT_ECHO_PIN, help="GPIO BCM do pino Echo do sensor ultrassônico")
+    parser.add_argument("--trig-pin", type=int, default=DEFAULT_TRIG_PIN)
+    parser.add_argument("--echo-pin", type=int, default=DEFAULT_ECHO_PIN)
     parser.add_argument("--unlock-active-low", action="store_true")
     parser.add_argument("--config", default=DEFAULT_CONFIG_FILE)
     parser.add_argument("--default-password", default="1234")
@@ -521,7 +533,7 @@ def main() -> None:
         test_keypad()
         return
     if args.mode == "buzzer":
-        test_buzzer(args.buzzer_pin)
+        test_buzzer(args.buzzer_pin, args.passive_buzzer)
         return
     if args.mode == "sensor":
         test_sensor(args.trig_pin, args.echo_pin)
@@ -542,6 +554,7 @@ def main() -> None:
             lock_pin=args.lock_pin,
             trig_pin=args.trig_pin,
             echo_pin=args.echo_pin,
+            use_passive_buzzer=args.passive_buzzer,
             unlock_active_high=unlock_active_high,
         )
 
